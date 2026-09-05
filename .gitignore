@@ -1,0 +1,26 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.vercel/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# Local agent and editor metadata must never enter repository history.
+.claude/
+.codex/
+.cursor/
+.worktrees/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+**/.claude/
+**/.codex/
+**/.cursor/
+**/AGENTS.md
+**/CLAUDE.md
+**/GEMINI.md

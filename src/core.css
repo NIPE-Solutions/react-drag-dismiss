@@ -1,0 +1,9 @@
+[data-drag-dismiss] {
+  transform: translate3d(var(--drag-dismiss-offset, 0px), 0, 0);
+}
+
+[data-drag-dismiss][data-state='dragging'],
+[data-drag-dismiss][data-state='settling'],
+[data-drag-dismiss][data-state='dismissed'] {
+  will-change: transform;
+}

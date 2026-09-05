@@ -1,0 +1,102 @@
+{
+  "name": "@nipe-solutions/react-drag-dismiss",
+  "version": "0.1.0-alpha.0",
+  "description": "Composable drag-to-dismiss mechanics for React.",
+  "homepage": "https://react-drag-dismiss.nipesolutions.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NIPE-Solutions/react-drag-dismiss.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NIPE-Solutions/react-drag-dismiss/issues"
+  },
+  "keywords": [
+    "react",
+    "typescript",
+    "drag",
+    "swipe",
+    "dismiss",
+    "gesture",
+    "touch",
+    "mobile-web",
+    "ui-primitives",
+    "accessibility"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./core.css": "./dist/core.css",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "npm@11.6.0",
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "overrides": {
+    "playwright-core": "1.58.2"
+  },
+  "scripts": {
+    "dev": "npm run build:dist && vite --config website/vite.config.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "build:dist": "rimraf dist && vite build && dts-bundle-generator --project tsconfig.build.json --silent --no-banner -o dist/index.d.ts src/index.ts && node scripts/copy-styles.mjs",
+    "build:website": "npm run build:dist && vite build --config website/vite.config.ts",
+    "test:api": "node scripts/check-public-api.mjs",
+    "test:size": "node scripts/check-bundle-size.mjs",
+    "test:package": "node --test test/package/verify-package.test.mjs",
+    "test:website": "node scripts/verify-website.mjs",
+    "test:workflows": "node --test scripts/verify-workflows.test.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run build:dist && npm run test:api && npm run test:size && npm run test:package && npm run build:website && npm run test:website && npm run test:workflows",
+    "release:check": "npm run check && npm pack --dry-run"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@eslint/js": "^9.35.0",
+    "@fontsource-variable/manrope": "^5.2.6",
+    "@fontsource-variable/newsreader": "^5.2.8",
+    "@playwright/test": "1.58.2",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "dts-bundle-generator": "^9.5.1",
+    "eslint": "^9.35.0",
+    "globals": "^16.3.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.6.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "@vitejs/plugin-react": "^5.0.2",
+    "vite": "^7.1.4",
+    "vitest": "^3.2.4"
+  }
+}

@@ -8,7 +8,8 @@ const code = `import { DragDismiss } from '@nipe-solutions/react-drag-dismiss'
 
 <DragDismiss
   directions={['start', 'end']}
-  onDismiss={({ direction }) => removeItem(id, direction)}
+  onDismiss={({ direction }) => recordCommit(id, direction)}
+  onDismissComplete={() => removeItem(id)}
 >
   <Notification />
 </DragDismiss>`
@@ -29,7 +30,7 @@ function DemoCard({
         <DragDismiss
           className="demo-card"
           directions={directions}
-          onDismiss={() => setVisible(false)}
+          onDismissComplete={() => setVisible(false)}
         >
           <span className="demo-mark" aria-hidden="true">
             N
@@ -97,7 +98,7 @@ export function App() {
         <section className="hero">
           <div className="hero-copy">
             <p className="status">
-              <span /> 0.1.0 alpha
+              <span /> 0.1.0-alpha.1
             </p>
             <h1>Drag to dismiss.</h1>
             <p className="hero-principle">
@@ -129,7 +130,7 @@ export function App() {
           </p>
           <p>
             <strong>Application-owned</strong>
-            <span>One semantic callback.</span>
+            <span>Commit and completion, never presence.</span>
           </p>
           <p>
             <strong>Zero runtime dependencies</strong>
@@ -149,6 +150,7 @@ export function App() {
               <a href="#accessibility">Accessibility</a>
               <a href="#styling">Styling</a>
               <a href="#api">API reference</a>
+              <a href="#troubleshooting">Troubleshooting</a>
               <a href="#limitations">Limitations</a>
             </nav>
           </aside>
@@ -208,9 +210,15 @@ export function App() {
               <p>
                 Unsupported directions receive restrained resistance. Canceled
                 gestures settle to origin and can be grabbed again from their
-                current visual position. A committed release calls{' '}
-                <code>onDismiss</code> immediately and continues off the
-                measured edge if the consumer keeps it mounted.
+                current visual position. Release velocity adjusts a bounded
+                settle duration so quick flicks continue briskly while slow
+                releases remain calm.
+              </p>
+              <p>
+                A committed release calls <code>onDismiss</code> immediately,
+                then departs beyond the measured edge. If the component stays
+                mounted, <code>onDismissComplete</code> fires once at the final
+                visual target. Committed departure cannot be re-grabbed.
               </p>
             </Section>
 
@@ -260,9 +268,10 @@ export function App() {
                 <div>
                   <h3>Interactive children</h3>
                   <p>
-                    Buttons, links, form controls, and text keep their normal
-                    behavior. Mouse drags do not originate from interactive
-                    controls.
+                    Buttons and links retain taps, while a claimed drag
+                    suppresses its release click. Inputs, textareas, selects,
+                    contenteditable regions, and descendants marked{' '}
+                    <code>data-drag-dismiss-ignore</code> never initiate drag.
                   </p>
                 </div>
                 <div>
@@ -308,12 +317,13 @@ export function App() {
                 replacement for a semantic dismiss control.
               </blockquote>
               <p>
-                Use the same application handler from a clearly named button.
-                The application decides focus after unmount. Drag Dismiss
-                injects no ARIA and invents no keyboard shortcuts.
+                Use a clearly named button for the same application action. If a
+                focused list item is removed, move focus to the next item or the
+                list container in application code. Drag Dismiss injects no
+                ARIA, moves no focus, and invents no keyboard shortcuts.
               </p>
               <pre>
-                <code>{`const dismiss = () => removeNotification(id)\n\n<button onClick={dismiss}>Dismiss notification</button>\n<DragDismiss onDismiss={dismiss}>…</DragDismiss>`}</code>
+                <code>{`const remove = () => removeNotification(id)\n\n<button onClick={remove}>Dismiss notification</button>\n<DragDismiss\n  onDismiss={() => logDismissIntent(id)}\n  onDismissComplete={remove}\n>\n  …\n</DragDismiss>`}</code>
               </pre>
             </Section>
 
@@ -328,7 +338,9 @@ export function App() {
                 <code>data-state="idle|dragging|settling|dismissed"</code>,{' '}
                 <code>data-dismiss-intent="true"</code>, and{' '}
                 <code>data-disabled</code>. Core motion translates only;
-                opacity, scale, and rotation remain yours.
+                consumer transform, opacity, scale, and rotation remain yours.
+                The individual CSS <code>translate</code> property is reserved
+                for mechanical drag offset.
               </p>
             </Section>
 
@@ -360,12 +372,59 @@ export function App() {
                 <div>
                   <code>onDismiss</code>
                   <span>
-                    Called once at commit with <code>{`{ direction }`}</code>.
+                    Called exactly once when release commits, before departure.
+                  </span>
+                </div>
+                <div>
+                  <code>onDismissComplete</code>
+                  <span>
+                    Optional; called once after mounted departure reaches its
+                    target, with the same <code>{`{ direction }`}</code>. It
+                    does not fire if the consumer unmounts first. Reduced motion
+                    preserves commit-before-complete ordering.
                   </span>
                 </div>
                 <div>
                   <code>onDragStart / onDragEnd</code>
                   <span>Low-frequency semantic lifecycle callbacks.</span>
+                </div>
+              </div>
+            </Section>
+
+            <Section id="troubleshooting" title="Troubleshooting">
+              <div className="two-col">
+                <div>
+                  <h3>Card disappears before departure</h3>
+                  <p>
+                    The consumer unmounted from <code>onDismiss</code>. Keep the
+                    node mounted and remove it from{' '}
+                    <code>onDismissComplete</code> when visual completion
+                    matters.
+                  </p>
+                </div>
+                <div>
+                  <h3>Exclude a custom control</h3>
+                  <p>
+                    Form editors are protected automatically. Add{' '}
+                    <code>data-drag-dismiss-ignore</code> to a slider, map,
+                    canvas, editor, or other custom interaction surface.
+                  </p>
+                </div>
+                <div>
+                  <h3>Compose transforms</h3>
+                  <p>
+                    Keep scale and rotation in <code>transform</code>. Drag
+                    Dismiss uses the independent <code>translate</code>{' '}
+                    property, so both remain active.
+                  </p>
+                </div>
+                <div>
+                  <h3>Horizontal gesture conflict</h3>
+                  <p>
+                    A surface should generally have one horizontal owner. Choose
+                    Drag Dismiss or Swipe Actions, or separate their starting
+                    surfaces explicitly.
+                  </p>
                 </div>
               </div>
             </Section>
@@ -382,8 +441,9 @@ export function App() {
                   globally.
                 </li>
                 <li>
-                  A committed callback may unmount immediately and therefore cut
-                  the optional exit motion short.
+                  Unmounting in <code>onDismiss</code> intentionally cuts the
+                  departure short; use <code>onDismissComplete</code> when the
+                  visual exit must finish.
                 </li>
                 <li>
                   Physical iOS and Android device QA is pending for this alpha.
@@ -398,7 +458,20 @@ export function App() {
           Part of{' '}
           <a href="https://opensource.nipesolutions.com">NIPE Open Source</a>.
         </p>
-        <nav aria-label="Legal">
+        <nav aria-label="Project and legal links">
+          <a href="https://github.com/NIPE-Solutions/react-drag-dismiss">
+            GitHub
+          </a>
+          <a href="https://github.com/NIPE-Solutions/react-drag-dismiss/blob/main/CHANGELOG.md">
+            Changelog
+          </a>
+          <a href="https://github.com/NIPE-Solutions/react-drag-dismiss/security/policy">
+            Security
+          </a>
+          <a href="https://github.com/NIPE-Solutions/react-drag-dismiss/blob/main/LICENSE">
+            License
+          </a>
+          <a href="https://opensource.nipesolutions.com">NIPE Open Source</a>
           <a href="https://opensource.nipesolutions.com/impressum">Imprint</a>
           <a href="https://opensource.nipesolutions.com/privacy">Privacy</a>
         </nav>

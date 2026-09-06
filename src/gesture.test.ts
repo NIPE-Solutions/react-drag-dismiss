@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   applyResistance,
+  getSettleDuration,
   decideDismiss,
   getAxis,
   getPhysicalSign,
@@ -39,6 +40,9 @@ describe('intent and resistance', () => {
     expect(resolveIntent(3, 12, 'x')).toBe('abandon'))
   test('resists unsupported travel', () =>
     expect(applyResistance(-100, [1])).toBeCloseTo(-24))
+  test('resists supported travel beyond the element size', () => {
+    expect(applyResistance(400, [1], 200)).toBeCloseTo(233.94, 1)
+  })
 })
 
 describe('velocity and commitment', () => {
@@ -96,5 +100,15 @@ describe('velocity and commitment', () => {
         threshold: 0.4,
       }),
     ).toBe(1)
+  })
+})
+
+describe('settle motion', () => {
+  test('release velocity makes the same remaining distance settle faster within bounds', () => {
+    expect(getSettleDuration(180, 0)).toBe(266)
+    expect(getSettleDuration(180, 1.5)).toBeLessThan(266)
+    expect(getSettleDuration(180, -1.5)).toBe(266)
+    expect(getSettleDuration(180, 100)).toBeGreaterThanOrEqual(110)
+    expect(getSettleDuration(2_000, 0)).toBeLessThanOrEqual(320)
   })
 })

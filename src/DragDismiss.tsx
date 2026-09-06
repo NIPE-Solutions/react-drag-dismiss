@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -14,6 +15,7 @@ import {
   getAxis,
   getPhysicalSign,
   getRecentVelocity,
+  getSettleDuration,
   resolveIntent,
   updateArmed,
   type Axis,
@@ -50,27 +52,68 @@ export interface DragDismissProps extends Omit<
   onDragStart?: () => void
   onDragEnd?: (event: DragDismissEndEvent) => void
   onDismiss?: (event: DragDismissEvent) => void
+  onDismissComplete?: (event: DragDismissEvent) => void
 }
 
-interface Session {
+interface GestureConfig {
+  axis: Axis
+  directions: readonly DragDismissDirection[]
+  signs: readonly number[]
+  writingDirection: WritingDirection
+  threshold: number
+  size: number
+  onDragStart: (() => void) | undefined
+  onDragEnd: ((event: DragDismissEndEvent) => void) | undefined
+  onDismiss: ((event: DragDismissEvent) => void) | undefined
+  onDismissComplete: ((event: DragDismissEvent) => void) | undefined
+}
+
+interface Session extends GestureConfig {
   pointerId: number
   startX: number
   startY: number
   startOffset: number
-  size: number
-  status: 'pending' | 'claimed' | 'abandoned'
+  status: 'pending' | 'claimed'
   samples: PointerSample[]
+  blurHandler: () => void
+  interruptedReturn: boolean
 }
 
-type DragStyle = CSSProperties & {
-  '--drag-dismiss-offset'?: string
-  '--drag-dismiss-progress'?: number
+interface Motion extends GestureConfig {
+  kind: 'return' | 'departure'
+  direction: DragDismissDirection | undefined
+  frame: number | null
 }
 
-const interactiveSelector =
-  'button, a[href], input, select, textarea, [contenteditable="true"]'
+const DEFAULT_DIRECTIONS = ['end'] as const
+const editingSelector =
+  'input, select, textarea, [contenteditable]:not([contenteditable="false"]), [data-drag-dismiss-ignore]'
 
-function writingDirection(element: HTMLElement): WritingDirection {
+function validateConfiguration(
+  directions: readonly DragDismissDirection[],
+  threshold: number,
+): Axis {
+  if (directions.length === 0)
+    throw new Error('`directions` must contain at least one direction.')
+  const first = directions[0] as DragDismissDirection
+  const axis = getAxis(first)
+  const differentAxis = directions.find(
+    (direction) => getAxis(direction) !== axis,
+  )
+  if (differentAxis) {
+    throw new Error(
+      `\`directions\` must belong to one axis. Received "${first}" and "${differentAxis}".`,
+    )
+  }
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
+    throw new Error(
+      '`threshold` must be a finite number greater than 0 and less than or equal to 1.',
+    )
+  }
+  return axis
+}
+
+function resolveWritingDirection(element: HTMLElement): WritingDirection {
   const explicit = element.closest('[dir]')?.getAttribute('dir')
   if (explicit === 'rtl') return 'rtl'
   if (explicit === 'ltr') return 'ltr'
@@ -87,125 +130,156 @@ function directionForSign(
   )
 }
 
+function initializeContinuousStyles(node: HTMLElement) {
+  node.style.translate = '0px 0px'
+  node.style.setProperty('--drag-dismiss-offset', '0px')
+  node.style.setProperty('--drag-dismiss-progress', '0')
+}
+
 export const DragDismiss = forwardRef<HTMLDivElement, DragDismissProps>(
   function DragDismiss(
     {
       children,
-      directions = ['end'],
+      directions = DEFAULT_DIRECTIONS,
       threshold = 0.4,
       disabled = false,
       onDragStart,
       onDragEnd,
       onDismiss,
+      onDismissComplete,
       onClickCapture,
       style,
       ...props
     },
     forwardedRef,
   ) {
+    const axis = validateConfiguration(directions, threshold)
     const nodeRef = useRef<HTMLDivElement>(null)
     const sessionRef = useRef<Session | null>(null)
-    const frameRef = useRef<number | null>(null)
+    const motionRef = useRef<Motion | null>(null)
     const offsetRef = useRef(0)
     const suppressClickRef = useRef(false)
     const committedRef = useRef(false)
     const armedRef = useRef(false)
+    const mountedRef = useRef(false)
     const [state, setState] = useState<
       'idle' | 'dragging' | 'settling' | 'dismissed'
     >('idle')
 
+    const setNodeRef = useCallback((node: HTMLDivElement | null) => {
+      nodeRef.current = node
+      if (node) initializeContinuousStyles(node)
+    }, [])
+
     useImperativeHandle(forwardedRef, () => nodeRef.current as HTMLDivElement)
 
-    const axis: Axis = getAxis(directions[0] ?? 'end')
-    const activeDirections = directions.filter(
-      (direction) => getAxis(direction) === axis,
-    )
-
-    function renderOffset(offset: number, size: number) {
+    function writeContinuous(offset: number, config: GestureConfig) {
       const node = nodeRef.current
       if (!node) return
       offsetRef.current = offset
-      const x = axis === 'x' ? offset : 0
-      const y = axis === 'y' ? offset : 0
-      node.style.transform = `translate3d(${x}px, ${y}px, 0)`
+      const x = config.axis === 'x' ? offset : 0
+      const y = config.axis === 'y' ? offset : 0
+      node.style.translate = `${x}px ${y}px`
       node.style.setProperty('--drag-dismiss-offset', `${offset}px`)
       node.style.setProperty(
         '--drag-dismiss-progress',
-        String(size > 0 ? offset / (size * threshold) : 0),
-      )
-      const dir = writingDirection(node)
-      const allowedSigns = activeDirections.map((candidate) =>
-        getPhysicalSign(candidate, dir),
+        String(offset / (config.size * config.threshold)),
       )
       const activeDirection = directionForSign(
-        activeDirections,
-        dir,
+        config.directions,
+        config.writingDirection,
         Math.sign(offset),
       )
       if (activeDirection) node.setAttribute('data-direction', activeDirection)
       else node.removeAttribute('data-direction')
-      const supported = allowedSigns.some((sign) => sign === Math.sign(offset))
+      const supported = config.signs.includes(Math.sign(offset))
       const armed = supported
-        ? updateArmed(armedRef.current, Math.abs(offset) / (size * threshold))
+        ? updateArmed(
+            armedRef.current,
+            Math.abs(offset) / (config.size * config.threshold),
+          )
         : false
       armedRef.current = armed
       if (armed) node.setAttribute('data-dismiss-intent', 'true')
       else node.removeAttribute('data-dismiss-intent')
     }
 
-    function stopMotion() {
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
-      frameRef.current = null
+    function detachSession(session: Session | null) {
+      if (!session) return
+      window.removeEventListener('blur', session.blurHandler)
+      if (sessionRef.current === session) sessionRef.current = null
     }
 
-    function settleTo(target: number, finalState: 'idle' | 'dismissed') {
-      stopMotion()
-      const node = nodeRef.current
-      if (!node) return
+    function stopMotion(allowDeparture = false) {
+      const motion = motionRef.current
+      if (!motion || (motion.kind === 'departure' && !allowDeparture))
+        return false
+      if (motion.frame !== null) cancelAnimationFrame(motion.frame)
+      motionRef.current = null
+      return true
+    }
+
+    function finishMotion(motion: Motion, target: number) {
+      if (motionRef.current !== motion || !mountedRef.current) return
+      writeContinuous(target, motion)
+      motionRef.current = null
+      if (motion.kind === 'departure' && motion.direction) {
+        setState('dismissed')
+        motion.onDismissComplete?.({ direction: motion.direction })
+      } else {
+        setState('idle')
+      }
+    }
+
+    function settleTo(
+      config: GestureConfig,
+      target: number,
+      initialVelocity: number,
+      kind: Motion['kind'],
+      direction?: DragDismissDirection,
+    ) {
+      stopMotion(true)
+      if (!nodeRef.current) return
+      const motion: Motion = {
+        ...config,
+        kind,
+        direction,
+        frame: null,
+      }
+      motionRef.current = motion
+      setState(kind === 'return' ? 'settling' : 'dismissed')
+      const start = offsetRef.current
+      const distance = target - start
       const reduceMotion = window.matchMedia?.(
         '(prefers-reduced-motion: reduce)',
       ).matches
-      const start = offsetRef.current
-      const distance = target - start
       if (reduceMotion || Math.abs(distance) < 0.5) {
-        renderOffset(
-          target,
-          Math.max(1, axis === 'x' ? node.clientWidth : node.clientHeight),
-        )
-        setState(finalState)
+        queueMicrotask(() => finishMotion(motion, target))
         return
       }
-      setState(finalState === 'idle' ? 'settling' : 'dismissed')
       const began = performance.now()
-      const duration = Math.min(280, Math.max(140, Math.abs(distance) * 0.7))
+      const duration = getSettleDuration(distance, initialVelocity)
       const tick = (now: number) => {
+        if (motionRef.current !== motion || !mountedRef.current) return
         const progress = Math.min(1, (now - began) / duration)
         const eased = 1 - Math.pow(1 - progress, 3)
-        renderOffset(
-          start + distance * eased,
-          Math.max(1, axis === 'x' ? node.clientWidth : node.clientHeight),
-        )
-        if (progress < 1) frameRef.current = requestAnimationFrame(tick)
-        else {
-          frameRef.current = null
-          setState(finalState)
-        }
+        writeContinuous(start + distance * eased, motion)
+        if (progress < 1) motion.frame = requestAnimationFrame(tick)
+        else finishMotion(motion, target)
       }
-      frameRef.current = requestAnimationFrame(tick)
-    }
-
-    function clearSession() {
-      sessionRef.current = null
+      motion.frame = requestAnimationFrame(tick)
     }
 
     function cancelGesture() {
       const session = sessionRef.current
       if (!session) return
       const claimed = session.status === 'claimed'
-      clearSession()
+      detachSession(session)
       if (claimed) {
-        onDragEnd?.({ dismissed: false })
-        settleTo(0, 'idle')
+        session.onDragEnd?.({ dismissed: false })
+        settleTo(session, 0, 0, 'return')
+      } else if (session.interruptedReturn && offsetRef.current !== 0) {
+        settleTo(session, 0, 0, 'return')
       } else setState('idle')
     }
 
@@ -214,64 +288,79 @@ export const DragDismiss = forwardRef<HTMLDivElement, DragDismissProps>(
         disabled ||
         committedRef.current ||
         !event.isPrimary ||
-        event.button !== 0
+        event.button !== 0 ||
+        sessionRef.current
+      )
+        return
+      if (
+        event.target instanceof Element &&
+        event.target.closest(editingSelector)
       )
         return
       suppressClickRef.current = false
-      if (
-        event.pointerType === 'mouse' &&
-        event.target instanceof Element &&
-        event.target.closest(interactiveSelector)
-      )
-        return
+      if (motionRef.current?.kind === 'departure') return
+      const interruptedReturn = motionRef.current?.kind === 'return'
       stopMotion()
       const node = nodeRef.current
       if (!node) return
       const rect = node.getBoundingClientRect()
-      sessionRef.current = {
+      const writingDirection = resolveWritingDirection(node)
+      const snapshotDirections = [...directions]
+      const snapshotAxis = getAxis(
+        snapshotDirections[0] as DragDismissDirection,
+      )
+      const session: Session = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         startOffset: offsetRef.current,
-        size: Math.max(1, axis === 'x' ? rect.width : rect.height),
+        size: Math.max(1, snapshotAxis === 'x' ? rect.width : rect.height),
         status: 'pending',
         samples: [{ position: offsetRef.current, time: event.timeStamp }],
+        axis: snapshotAxis,
+        directions: snapshotDirections,
+        signs: snapshotDirections.map((candidate) =>
+          getPhysicalSign(candidate, writingDirection),
+        ),
+        writingDirection,
+        threshold,
+        onDragStart,
+        onDragEnd,
+        onDismiss,
+        onDismissComplete,
+        blurHandler: () => {},
+        interruptedReturn,
       }
-      setState('idle')
+      session.blurHandler = () => cancelGesture()
+      sessionRef.current = session
+      window.addEventListener('blur', session.blurHandler)
     }
 
     function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
       const session = sessionRef.current
-      if (
-        !session ||
-        session.pointerId !== event.pointerId ||
-        session.status === 'abandoned'
-      )
-        return
+      if (!session || session.pointerId !== event.pointerId) return
       const movementX = event.clientX - session.startX
       const movementY = event.clientY - session.startY
       if (session.status === 'pending') {
-        const intent = resolveIntent(movementX, movementY, axis)
+        const intent = resolveIntent(movementX, movementY, session.axis)
         if (intent === 'pending') return
         if (intent === 'abandon') {
-          session.status = 'abandoned'
-          setState('idle')
+          detachSession(session)
+          if (session.interruptedReturn && offsetRef.current !== 0)
+            settleTo(session, 0, 0, 'return')
+          else setState('idle')
           return
         }
         session.status = 'claimed'
         event.currentTarget.setPointerCapture?.(event.pointerId)
         setState('dragging')
-        onDragStart?.()
+        session.onDragStart?.()
       }
       event.preventDefault()
       const rawOffset =
-        session.startOffset + (axis === 'x' ? movementX : movementY)
-      const direction = writingDirection(event.currentTarget)
-      const signs = activeDirections.map((candidate) =>
-        getPhysicalSign(candidate, direction),
-      )
-      const offset = applyResistance(rawOffset, signs)
-      renderOffset(offset, session.size)
+        session.startOffset + (session.axis === 'x' ? movementX : movementY)
+      const offset = applyResistance(rawOffset, session.signs, session.size)
+      writeContinuous(offset, session)
       session.samples.push({ position: offset, time: event.timeStamp })
       session.samples = session.samples.filter(
         (sample) => event.timeStamp - sample.time <= 140,
@@ -284,17 +373,17 @@ export const DragDismiss = forwardRef<HTMLDivElement, DragDismissProps>(
     ) {
       const session = sessionRef.current
       if (!session || session.pointerId !== event.pointerId) return
-      clearSession()
+      detachSession(session)
       if (session.status !== 'claimed') {
-        setState('idle')
+        if (session.interruptedReturn && offsetRef.current !== 0)
+          settleTo(session, 0, 0, 'return')
+        else setState('idle')
         return
       }
       event.currentTarget.releasePointerCapture?.(event.pointerId)
-      suppressClickRef.current = true
-      const direction = writingDirection(event.currentTarget)
-      const signs = activeDirections.map((candidate) =>
-        getPhysicalSign(candidate, direction),
-      )
+      // A canceled pointer stream does not produce a release click. Keeping
+      // suppression armed here would swallow the next unrelated interaction.
+      suppressClickRef.current = !canceled
       const velocity = canceled
         ? 0
         : getRecentVelocity(session.samples, event.timeStamp)
@@ -304,33 +393,37 @@ export const DragDismiss = forwardRef<HTMLDivElement, DragDismissProps>(
             offset: offsetRef.current,
             size: session.size,
             velocity,
-            allowedSigns: signs,
-            threshold,
+            allowedSigns: session.signs,
+            threshold: session.threshold,
           })
       const dismissedDirection =
         sign === null
           ? undefined
-          : directionForSign(activeDirections, direction, sign)
+          : directionForSign(session.directions, session.writingDirection, sign)
       if (sign === null || !dismissedDirection) {
-        onDragEnd?.({ dismissed: false })
-        settleTo(0, 'idle')
+        session.onDragEnd?.({ dismissed: false })
+        settleTo(session, 0, velocity, 'return')
         return
       }
       committedRef.current = true
       setState('dismissed')
-      onDragEnd?.({ dismissed: true, direction: dismissedDirection })
-      onDismiss?.({ direction: dismissedDirection })
-      const margin = 16
-      settleTo(sign * (session.size + margin), 'dismissed')
+      session.onDragEnd?.({ dismissed: true, direction: dismissedDirection })
+      session.onDismiss?.({ direction: dismissedDirection })
+      settleTo(
+        session,
+        sign * Math.max(session.size + 16, Math.abs(offsetRef.current) + 16),
+        velocity,
+        'departure',
+        dismissedDirection,
+      )
     }
 
     useEffect(() => {
-      const cancel = () => cancelGesture()
-      window.addEventListener('blur', cancel)
+      mountedRef.current = true
       return () => {
-        window.removeEventListener('blur', cancel)
-        stopMotion()
-        sessionRef.current = null
+        mountedRef.current = false
+        detachSession(sessionRef.current)
+        stopMotion(true)
       }
     }, [])
 
@@ -338,11 +431,8 @@ export const DragDismiss = forwardRef<HTMLDivElement, DragDismissProps>(
       if (disabled) cancelGesture()
     }, [disabled])
 
-    const mechanicalStyle: DragStyle = {
+    const mechanicalStyle: CSSProperties = {
       ...style,
-      '--drag-dismiss-offset': `${offsetRef.current}px`,
-      '--drag-dismiss-progress': 0,
-      transform: `translate3d(${axis === 'x' ? offsetRef.current : 0}px, ${axis === 'y' ? offsetRef.current : 0}px, 0)`,
       touchAction: disabled
         ? style?.touchAction
         : axis === 'x'
@@ -353,7 +443,7 @@ export const DragDismiss = forwardRef<HTMLDivElement, DragDismissProps>(
     return (
       <div
         {...props}
-        ref={nodeRef}
+        ref={setNodeRef}
         style={mechanicalStyle}
         data-drag-dismiss=""
         data-state={state}

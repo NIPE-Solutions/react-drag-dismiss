@@ -27,5 +27,20 @@ describe('documentation site', () => {
     expect(
       screen.getByRole('heading', { name: 'Known limitations' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Troubleshooting' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('onDismissComplete').length).toBeGreaterThan(0)
+    for (const name of [
+      'GitHub',
+      'Changelog',
+      'Security',
+      'License',
+      'NIPE Open Source',
+      'Imprint',
+      'Privacy',
+    ]) {
+      expect(screen.getAllByRole('link', { name }).length).toBeGreaterThan(0)
+    }
   })
 })

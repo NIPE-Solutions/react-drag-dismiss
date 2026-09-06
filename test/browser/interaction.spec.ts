@@ -58,3 +58,22 @@ test('RTL logical end moves left and the page has no serious axe violations', as
     ),
   ).toEqual([])
 })
+
+test('drag translation preserves a consumer CSS transform', async ({
+  page,
+}) => {
+  const card = page.locator('.hero-demo .demo-card')
+  const box = await card.boundingBox()
+  if (!box) throw new Error('Demo card was not measurable')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2)
+  await expect(card).toHaveAttribute('data-state', 'dragging')
+  const styles = await card.evaluate((node) => {
+    const computed = getComputedStyle(node)
+    return { transform: computed.transform, translate: computed.translate }
+  })
+  expect(styles.transform).not.toBe('none')
+  expect(styles.translate).not.toBe('none')
+  await page.mouse.up()
+})

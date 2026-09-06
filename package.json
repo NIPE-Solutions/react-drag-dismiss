@@ -1,6 +1,6 @@
 {
   "name": "@nipe-solutions/react-drag-dismiss",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Composable drag-to-dismiss mechanics for React.",
   "homepage": "https://react-drag-dismiss.nipesolutions.com",
   "repository": {

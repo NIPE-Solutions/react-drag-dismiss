@@ -40,10 +40,15 @@ export function resolveIntent(
 export function applyResistance(
   offset: number,
   allowedSigns: readonly number[],
+  limit = Number.POSITIVE_INFINITY,
 ): number {
   const sign = Math.sign(offset)
-  if (offset === 0 || allowedSigns.includes(sign)) return offset
-  return sign * Math.sqrt(Math.abs(offset)) * 2.4
+  if (offset === 0) return offset
+  if (!allowedSigns.includes(sign))
+    return sign * Math.sqrt(Math.abs(offset)) * 2.4
+  const absoluteOffset = Math.abs(offset)
+  if (absoluteOffset <= limit) return offset
+  return sign * (limit + Math.sqrt(absoluteOffset - limit) * 2.4)
 }
 
 export function updateArmed(
@@ -79,6 +84,21 @@ export function getRecentVelocity(
     denominator += deltaTime * deltaTime
   }
   return denominator === 0 ? 0 : numerator / denominator
+}
+
+export function getSettleDuration(
+  distance: number,
+  initialVelocity: number,
+): number {
+  const absoluteDistance = Math.abs(distance)
+  const base = Math.min(320, Math.max(160, 140 + absoluteDistance * 0.7))
+  const alignedVelocity = Math.max(
+    0,
+    Math.sign(distance) *
+      (Number.isFinite(initialVelocity) ? initialVelocity : 0),
+  )
+  const velocityFactor = 1 - Math.min(0.58, alignedVelocity * 0.28)
+  return Math.round(Math.min(320, Math.max(110, base * velocityFactor)))
 }
 
 export interface DismissDecision {

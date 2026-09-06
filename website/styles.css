@@ -166,6 +166,7 @@ h1 {
   box-shadow: 12px 14px 0 #10223f13;
   cursor: grab;
   user-select: none;
+  transform: scale(1);
 }
 .demo-card:active {
   cursor: grabbing;
@@ -373,6 +374,10 @@ footer {
   display: flex;
   justify-content: space-between;
   font-size: 14px;
+}
+footer nav {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 @media (max-width: 800px) {
   .site-header nav a:not(:last-child) {

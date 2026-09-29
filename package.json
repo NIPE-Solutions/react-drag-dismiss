@@ -76,7 +76,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@eslint/js": "^9.35.0",
+    "@eslint/js": "^10.0.1",
     "@fontsource-variable/manrope": "^5.2.6",
     "@fontsource-variable/newsreader": "^5.2.8",
     "@playwright/test": "1.58.2",

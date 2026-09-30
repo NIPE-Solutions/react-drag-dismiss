@@ -4,6 +4,8 @@ Drag-to-dismiss mechanics for arbitrary React content.
 
 Intent detection, velocity, resistance and settling without owning your application state.
 
+Version 1.x is stable and supports React 18.3 and React 19.
+
 ```bash
 npm install @nipe-solutions/react-drag-dismiss
 ```
@@ -26,6 +28,8 @@ import '@nipe-solutions/react-drag-dismiss/core.css'
 The package detects intent and provides motion mechanics. Your application owns removal, unmounting, undo, focus, persistence, and side effects. Always provide an accessible semantic control for required dismissal actions.
 
 `onDismiss` fires once when release commits. Optional `onDismissComplete` fires once after a mounted departure reaches its visual target; it does not fire if the consumer unmounts first. Use `data-drag-dismiss-ignore` on custom controls that must never initiate a gesture. Inputs, textareas, selects, and contenteditable descendants are ignored automatically.
+
+Automated interaction coverage runs in desktop Chromium, Firefox, and WebKit. Physical iOS and Android testing and human screen-reader testing were not performed for 1.0.0; desktop WebKit is not a substitute for iOS Safari. Always keep an ordinary semantic control available for dismissal.
 
 Full documentation: [react-drag-dismiss.nipesolutions.com](https://react-drag-dismiss.nipesolutions.com)
 

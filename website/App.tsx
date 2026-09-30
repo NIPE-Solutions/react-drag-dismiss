@@ -98,7 +98,7 @@ export function App() {
         <section className="hero">
           <div className="hero-copy">
             <p className="status">
-              <span /> 0.1.0-alpha.1
+              <span /> 1.0 stable
             </p>
             <h1>Drag to dismiss.</h1>
             <p className="hero-principle">
@@ -446,7 +446,12 @@ export function App() {
                   visual exit must finish.
                 </li>
                 <li>
-                  Physical iOS and Android device QA is pending for this alpha.
+                  Physical iOS and Android testing was not performed for 1.0.0.
+                  Desktop WebKit automation is not iOS Safari certification.
+                </li>
+                <li>
+                  Human screen-reader testing was not performed for 1.0.0. An
+                  ordinary semantic control remains required for dismissal.
                 </li>
               </ul>
             </Section>

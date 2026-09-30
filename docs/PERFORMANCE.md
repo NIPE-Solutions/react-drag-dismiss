@@ -7,3 +7,5 @@ While idle, the group creates no window blur listeners, animation frames, or obs
 Pointer movement writes `translate`, offset, progress, and semantic data attributes directly to the active element. It performs no React render per frame, computed-style lookup, or geometry measurement. Settle frames reuse the gesture-start size and configuration snapshot.
 
 These are qualitative resource invariants rather than timing claims. Render duration depends on React mode, consumer content, browser, and device, so the project does not advertise a synthetic rows-per-second benchmark.
+
+The 1.0.0 release checks these invariants through deterministic unit coverage and verifies active interaction in desktop Chromium, Firefox, and WebKit. It makes no timing or frame-rate claim for physical mobile hardware.

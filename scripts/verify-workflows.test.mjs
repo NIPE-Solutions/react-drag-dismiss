@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import test from 'node:test'
+import { promisify } from 'node:util'
 import { parse } from 'yaml'
 
+const execFileAsync = promisify(execFile)
 const repositoryRoot = path.resolve(import.meta.dirname, '..')
 const releaseTarball = 'nipe-solutions-react-drag-dismiss-1.0.0.tgz'
 
@@ -42,12 +55,64 @@ test('release separates unprivileged verification from protected publish', async
   validateReleaseWorkflow(await readWorkflow('.github/workflows/release.yml'))
 })
 
+test('publish shell rejects a checksum that names a substituted artifact', async () => {
+  const workflow = await readWorkflow('.github/workflows/release.yml')
+  const script = workflow.jobs.publish.steps.at(-1).run
+  const temporaryRoot = await mkdtemp(
+    path.join(tmpdir(), 'react-drag-dismiss-publish-'),
+  )
+  const artifactDirectory = path.join(temporaryRoot, 'artifact')
+  const binaryDirectory = path.join(temporaryRoot, 'bin')
+  const marker = path.join(temporaryRoot, 'published')
+
+  try {
+    await mkdir(artifactDirectory)
+    await mkdir(binaryDirectory)
+    const npmShim = path.join(binaryDirectory, 'npm')
+    await writeFile(
+      npmShim,
+      '#!/bin/sh\nprintf "%s\\n" "$*" > "$PUBLISH_MARKER"\n',
+    )
+    await chmod(npmShim, 0o755)
+
+    const tarball = path.join(artifactDirectory, releaseTarball)
+    await writeFile(tarball, 'verified tarball\n')
+    await writeFile(
+      `${tarball}.sha512`,
+      `${sha512('verified tarball\n')}  ${releaseTarball}\n`,
+    )
+    await runPublishScript(script, artifactDirectory, binaryDirectory, marker)
+    assert.match(
+      await readFile(marker, 'utf8'),
+      /publish --ignore-scripts --provenance --access public --tag latest/,
+    )
+
+    await rm(marker)
+    const substitutedName = 'nipe-solutions-react-drag-dismiss-1X0X0Xtgz'
+    await writeFile(
+      path.join(artifactDirectory, substitutedName),
+      'substituted artifact\n',
+    )
+    await writeFile(
+      `${tarball}.sha512`,
+      `${sha512('substituted artifact\n')}  ${substitutedName}\n`,
+    )
+    await assert.rejects(() =>
+      runPublishScript(script, artifactDirectory, binaryDirectory, marker),
+    )
+    await assert.rejects(() => readFile(marker, 'utf8'), /ENOENT/)
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
 test('release validator rejects weakened trust boundaries', async () => {
   const workflow = await readWorkflow('.github/workflows/release.yml')
   const mutations = [
     (copy) => (copy.on.release.types = ['created']),
     (copy) => delete copy.jobs.verify.if,
     (copy) => (copy.permissions = { 'id-token': 'write' }),
+    (copy) => (copy.jobs.verify.permissions = { 'id-token': 'write' }),
     (copy) => (copy.concurrency.group = 'release-${{ github.ref }}'),
     (copy) => delete findAction(copy.jobs.verify, 'actions/checkout').with,
     (copy) =>
@@ -55,6 +120,10 @@ test('release validator rejects weakened trust boundaries', async () => {
     (copy) =>
       (findRun(copy.jobs.verify, 'npm run release:check').run =
         'npm pack --dry-run'),
+    (copy) => (findRun(copy.jobs.verify, 'npm run check').if = 'false'),
+    (copy) =>
+      (findRun(copy.jobs.verify, 'npm run test:e2e')['continue-on-error'] =
+        true),
     (copy) =>
       (findAction(copy.jobs.verify, 'actions/upload-artifact').with.name =
         'different-artifact'),
@@ -95,6 +164,27 @@ test('release validator rejects weakened trust boundaries', async () => {
 
 async function readWorkflow(relativePath) {
   return parse(await readFile(path.join(repositoryRoot, relativePath), 'utf8'))
+}
+
+async function runPublishScript(
+  script,
+  artifactDirectory,
+  binaryDirectory,
+  marker,
+) {
+  return execFileAsync('bash', ['-c', script], {
+    cwd: artifactDirectory,
+    env: {
+      ...process.env,
+      PATH: `${binaryDirectory}:${process.env.PATH}`,
+      PUBLISH_MARKER: marker,
+      RELEASE_TARBALL: releaseTarball,
+    },
+  })
+}
+
+function sha512(contents) {
+  return createHash('sha512').update(contents).digest('hex')
 }
 
 function stepsFor(job) {
@@ -204,6 +294,7 @@ function validateReleaseWorkflow(workflow) {
   assert.deepEqual(verify.outputs, {
     tarball: '${{ steps.release.outputs.tarball }}',
   })
+  assert.equal(verify.permissions, undefined)
   assertActionMajor(verify, 'actions/checkout')
   assert.equal(findAction(verify, 'actions/checkout').with?.['fetch-depth'], 0)
   assertNodeSetup(verify)
@@ -215,6 +306,18 @@ function validateReleaseWorkflow(workflow) {
     'npm run test:e2e',
     'npm run release:check -- --dry-run --output release-artifact',
   ])
+  for (const command of [
+    'git merge-base --is-ancestor HEAD origin/main',
+    'npm ci',
+    'npm run check',
+    'npx playwright install --with-deps chromium firefox webkit',
+    'npm run test:e2e',
+    'npm run release:check -- --dry-run --output release-artifact',
+  ]) {
+    const step = findRun(verify, command)
+    assert.equal(step.if, undefined)
+    assert.equal(step['continue-on-error'], undefined)
+  }
 
   const releaseStep = findRun(verify, 'npm run release:check')
   assert.equal(releaseStep.id, 'release')
@@ -263,7 +366,10 @@ function validateReleaseWorkflow(workflow) {
   assert.match(finalStep.run, /\$\{#tarballs\[@\]\} != 1/)
   assert.match(finalStep.run, /manifests=\(\*\.sha512\)/)
   assert.match(finalStep.run, /\$\{#manifests\[@\]\} != 1/)
-  assert.match(finalStep.run, /\^\[0-9a-f\]\{128\}/)
+  assert.match(finalStep.run, /entries=\(\*\)/)
+  assert.match(finalStep.run, /\$\{#entries\[@\]\} != 2/)
+  assert.match(finalStep.run, /\[0-9a-f\]\{128\}/)
+  assert.match(finalStep.run, /BASH_REMATCH\[2\]/)
   assert.match(finalStep.run, /sha512sum --check --strict/)
   assert.equal((finalStep.run.match(/npm publish/g) ?? []).length, 1)
   assert.match(

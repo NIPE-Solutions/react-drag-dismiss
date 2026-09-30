@@ -87,9 +87,14 @@ jobs:
             exit 1
           fi
 
-          shopt -s nullglob
+          shopt -s nullglob dotglob
+          entries=(*)
           tarballs=(*.tgz)
           manifests=(*.sha512)
+          if (( ${#entries[@]} != 2 )); then
+            echo "Artifact must contain only the tarball and its checksum" >&2
+            exit 1
+          fi
           if (( ${#tarballs[@]} != 1 )) || [[ "${tarballs[0]}" != "$expected_tarball" ]]; then
             echo "Artifact must contain exactly $expected_tarball" >&2
             exit 1
@@ -110,8 +115,12 @@ jobs:
           fi
 
           manifest_line="$(<"$manifest")"
-          if [[ ! "$manifest_line" =~ ^[0-9a-f]{128}\ \ $expected_tarball$ ]]; then
+          if [[ ! "$manifest_line" =~ ^([0-9a-f]{128})\ \ ([A-Za-z0-9._-]+)$ ]]; then
             echo "Checksum manifest must contain one lowercase SHA-512 entry for $expected_tarball" >&2
+            exit 1
+          fi
+          if [[ "${BASH_REMATCH[2]}" != "$RELEASE_TARBALL" ]]; then
+            echo "Checksum manifest filename must match $RELEASE_TARBALL" >&2
             exit 1
           fi
 

@@ -851,9 +851,95 @@ describe('DragDismiss', () => {
     expect(nextDismiss).not.toHaveBeenCalled()
   })
 
-  test('unmount cancels active motion and releases session resources', () => {
+  test('unmount releases a pending pointer session without callbacks', () => {
     const add = vi.spyOn(window, 'addEventListener')
     const remove = vi.spyOn(window, 'removeEventListener')
+    const onDragEnd = vi.fn()
+    const onDismiss = vi.fn()
+    try {
+      const { getByTestId, unmount } = render(
+        <DragDismiss
+          data-testid="root"
+          onDragEnd={onDragEnd}
+          onDismiss={onDismiss}
+        >
+          Row
+        </DragDismiss>,
+      )
+      const root = getByTestId('root')
+      measure(root)
+      pointer(root, 'pointerdown', {
+        clientX: 0,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      const registration = add.mock.calls.find(([type]) => type === 'blur')
+
+      unmount()
+
+      expect(registration).toBeDefined()
+      expect(
+        remove.mock.calls.filter(
+          ([type, listener]) =>
+            type === 'blur' && listener === registration?.[1],
+        ),
+      ).toHaveLength(1)
+      expect(onDragEnd).not.toHaveBeenCalled()
+      expect(onDismiss).not.toHaveBeenCalled()
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+
+  test('unmount releases a claimed pointer session without callbacks', () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const onDragEnd = vi.fn()
+    const onDismiss = vi.fn()
+    try {
+      const { getByTestId, unmount } = render(
+        <DragDismiss
+          data-testid="root"
+          onDragEnd={onDragEnd}
+          onDismiss={onDismiss}
+        >
+          Row
+        </DragDismiss>,
+      )
+      const root = getByTestId('root')
+      measure(root)
+      pointer(root, 'pointerdown', {
+        clientX: 0,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      pointer(root, 'pointermove', {
+        clientX: 30,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      const registration = add.mock.calls.find(([type]) => type === 'blur')
+
+      unmount()
+
+      expect(registration).toBeDefined()
+      expect(
+        remove.mock.calls.filter(
+          ([type, listener]) =>
+            type === 'blur' && listener === registration?.[1],
+        ),
+      ).toHaveLength(1)
+      expect(onDragEnd).not.toHaveBeenCalled()
+      expect(onDismiss).not.toHaveBeenCalled()
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+
+  test('unmount cancels active settling motion', () => {
+    const add = vi.spyOn(window, 'addEventListener')
     const cancelFrame = vi.fn()
     vi.stubGlobal(
       'requestAnimationFrame',
@@ -886,11 +972,10 @@ describe('DragDismiss', () => {
 
       unmount()
 
-      expect(remove).toHaveBeenCalledWith('blur', registration?.[1])
+      expect(registration).toBeDefined()
       expect(cancelFrame).toHaveBeenCalledWith(17)
     } finally {
       add.mockRestore()
-      remove.mockRestore()
       vi.unstubAllGlobals()
     }
   })

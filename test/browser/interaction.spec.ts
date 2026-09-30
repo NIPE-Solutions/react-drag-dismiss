@@ -187,6 +187,7 @@ test('lost pointer capture returns the surface and permits another gesture', asy
     node.addEventListener(
       'pointerdown',
       (event) => {
+        if (!(event instanceof PointerEvent)) return
         node.setAttribute('data-test-pointer-id', String(event.pointerId))
       },
       { once: true },

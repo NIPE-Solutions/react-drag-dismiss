@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 — 2026-09-30
+
+- Stabilize the existing `DragDismiss` component, public TypeScript types, logical direction model, callback lifecycle, and `core.css` styling contract.
+- Expand lifecycle and interaction coverage for cancellation, lost pointer capture, callback snapshots, reduced motion, RTL, editable descendants, click suppression, vertical gestures, and browser errors.
+- Verify the exact ten-file package in isolated React 18 and React 19 consumers across ESM, CommonJS, strict TypeScript, CSS exports, and server rendering.
+- Publish the reviewed tarball through a protected two-stage npm workflow with provenance and an exact SHA-512 artifact handoff.
+
 ## 0.1.0-alpha.1 — 2026-09-06
 
 - Preserve continuous offset and progress across React renders and preserve consumer transforms with independent CSS translation.

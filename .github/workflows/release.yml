@@ -1,22 +1,128 @@
 name: Release
+
 on:
-  workflow_dispatch:
+  release:
+    types:
+      - published
+
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: npm-nipe-solutions-react-drag-dismiss-stable
+  cancel-in-progress: false
+
 jobs:
-  publish:
-    environment: npm
-    runs-on: ubuntu-latest
+  verify:
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      tarball: ${{ steps.release.outputs.tarball }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - name: Check out repository
+        uses: actions/checkout@v7
         with:
-          {
-            node-version: 24,
-            registry-url: 'https://registry.npmjs.org',
-            cache: npm,
-          }
-      - run: npm ci
-      - run: npm run release:check
-      - run: npm publish --provenance --access public --tag alpha
+          fetch-depth: 0
+      - name: Require a release from main
+        run: git merge-base --is-ancestor HEAD origin/main
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run quality gate
+        run: npm run check
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Run complete browser suite
+        run: npm run test:e2e
+      - name: Verify and preserve release artifact
+        id: release
+        run: npm run release:check -- --dry-run --output release-artifact
+      - name: Upload verified release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package-stable
+          path: release-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    environment: npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - name: Set up Node.js for trusted publishing
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Download verified release artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: npm-package-stable
+          path: release-artifact
+      - name: Validate and publish verified artifact
+        env:
+          RELEASE_TARBALL: ${{ needs.verify.outputs.tarball }}
+        working-directory: release-artifact
+        run: |
+          set -euo pipefail
+
+          RELEASE_CHANNEL="latest"
+          expected_tarball="nipe-solutions-react-drag-dismiss-1.0.0.tgz"
+          if [[ "$RELEASE_CHANNEL" != "latest" ]]; then
+            echo "Release channel must be latest" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TARBALL" =~ ^[A-Za-z0-9._-]+$ ]] || [[ "$RELEASE_TARBALL" != "$expected_tarball" ]]; then
+            echo "Unsafe release tarball: expected $expected_tarball" >&2
+            exit 1
+          fi
+
+          shopt -s nullglob dotglob
+          entries=(*)
+          tarballs=(*.tgz)
+          manifests=(*.sha512)
+          if (( ${#entries[@]} != 2 )); then
+            echo "Artifact must contain only the tarball and its checksum" >&2
+            exit 1
+          fi
+          if (( ${#tarballs[@]} != 1 )) || [[ "${tarballs[0]}" != "$expected_tarball" ]]; then
+            echo "Artifact must contain exactly $expected_tarball" >&2
+            exit 1
+          fi
+
+          manifest="${RELEASE_TARBALL}.sha512"
+          if (( ${#manifests[@]} != 1 )) || [[ "${manifests[0]}" != "$manifest" ]]; then
+            echo "Checksum manifest name must exactly match $manifest" >&2
+            exit 1
+          fi
+          if [[ ! -f "$RELEASE_TARBALL" ]] || [[ ! -f "$manifest" ]]; then
+            echo "Verified tarball or checksum manifest is missing" >&2
+            exit 1
+          fi
+          if [[ "$(wc -l < "$manifest")" -ne 1 ]]; then
+            echo "Checksum manifest must contain exactly one entry" >&2
+            exit 1
+          fi
+
+          manifest_line="$(<"$manifest")"
+          if [[ ! "$manifest_line" =~ ^([0-9a-f]{128})\ \ ([A-Za-z0-9._-]+)$ ]]; then
+            echo "Checksum manifest must contain one lowercase SHA-512 entry for $expected_tarball" >&2
+            exit 1
+          fi
+          if [[ "${BASH_REMATCH[2]}" != "$RELEASE_TARBALL" ]]; then
+            echo "Checksum manifest filename must match $RELEASE_TARBALL" >&2
+            exit 1
+          fi
+
+          sha512sum --check --strict -- "$manifest"
+          npm publish --ignore-scripts --provenance --access public --tag latest "$RELEASE_TARBALL"

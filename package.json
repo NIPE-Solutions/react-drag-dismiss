@@ -1,6 +1,6 @@
 {
   "name": "@nipe-solutions/react-drag-dismiss",
-  "version": "0.1.0-alpha.1",
+  "version": "1.0.0",
   "description": "Composable drag-to-dismiss mechanics for React.",
   "homepage": "https://react-drag-dismiss.nipesolutions.com",
   "repository": {
@@ -28,7 +28,8 @@
     "*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -51,9 +52,11 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": true,
+    "tag": "latest"
   },
   "overrides": {
+    "brace-expansion": "5.0.12",
     "playwright-core": "1.58.2"
   },
   "scripts": {
@@ -71,8 +74,9 @@
     "test:package": "node --test test/package/verify-package.test.mjs",
     "test:website": "node scripts/verify-website.mjs",
     "test:workflows": "node --test scripts/verify-workflows.test.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run build:dist && npm run test:api && npm run test:size && npm run test:package && npm run build:website && npm run test:website && npm run test:workflows",
-    "release:check": "npm run check && npm pack --dry-run"
+    "test:release-policy": "node --test scripts/verify-release.test.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run build:dist && npm run test:api && npm run test:size && npm run test:package && npm run build:website && npm run test:website && npm run test:workflows && npm run test:release-policy",
+    "release:check": "node scripts/verify-release.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
@@ -85,6 +89,7 @@
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^10.10.0",
     "globals": "^16.3.0",
@@ -95,8 +100,8 @@
     "rimraf": "^6.0.1",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.42.0",
-    "@vitejs/plugin-react": "^5.0.2",
     "vite": "^7.1.4",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.2",
+    "yaml": "2.9.1"
   }
 }

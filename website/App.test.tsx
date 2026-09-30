@@ -5,6 +5,7 @@ import { App } from './App'
 describe('documentation site', () => {
   test('leads with the interactive product promise', () => {
     render(<App />)
+    expect(screen.getByText('1.0 stable')).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { level: 1, name: /drag to dismiss/i }),
     ).toBeInTheDocument()
@@ -31,6 +32,16 @@ describe('documentation site', () => {
       screen.getByRole('heading', { name: 'Troubleshooting' }),
     ).toBeInTheDocument()
     expect(screen.getAllByText('onDismissComplete').length).toBeGreaterThan(0)
+    expect(
+      screen.getByText(
+        /physical iOS and Android testing was not performed for 1\.0\.0/i,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /human screen-reader testing was not performed for 1\.0\.0/i,
+      ),
+    ).toBeInTheDocument()
     for (const name of [
       'GitHub',
       'Changelog',

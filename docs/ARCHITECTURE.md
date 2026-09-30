@@ -2,6 +2,8 @@
 
 Drag Dismiss separates continuous interaction mechanics from semantic React state.
 
+The 1.x public boundary consists of `DragDismiss`, its exported event and prop types, logical directions, lifecycle callbacks, stable data attributes, CSS custom properties, and `core.css`. Internal gesture and motion code may change without altering that contract.
+
 ## Pointer session snapshot
 
 Pointer down measures the element once and snapshots the axis, logical directions, physical signs, writing direction, threshold, size, and lifecycle callbacks. Prop changes and resizing during that gesture take effect on the next gesture. Pointer movement performs no layout or computed-style reads.
@@ -25,3 +27,7 @@ Recent sampled velocity participates in both commitment and bounded settle durat
 ## Resource lifecycle
 
 Each idle instance owns only element-level React handlers. The window blur safeguard exists only while a pointer session is active and is removed when that session ends, abandons, or unmounts. There are no observers or idle animation frames.
+
+## Compatibility evidence
+
+The package is tested with React 18.3 and React 19 consumers. Automated interaction coverage runs in desktop Chromium, Firefox, and WebKit. Those engines exercise the browser contract but do not certify physical iOS Safari or Android Chrome behavior.

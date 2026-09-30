@@ -732,4 +732,204 @@ describe('DragDismiss', () => {
     fireEvent.click(root, { detail: 1 })
     expect(onClick).toHaveBeenCalledOnce()
   })
+
+  test('window blur cancels a claimed gesture and removes its listener', () => {
+    const onDragEnd = vi.fn()
+    const onDismiss = vi.fn()
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    try {
+      const { getByTestId } = render(
+        <DragDismiss
+          data-testid="root"
+          onDragEnd={onDragEnd}
+          onDismiss={onDismiss}
+        >
+          Row
+        </DragDismiss>,
+      )
+      const root = getByTestId('root')
+      measure(root)
+      pointer(root, 'pointerdown', {
+        clientX: 0,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      pointer(root, 'pointermove', {
+        clientX: 30,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      const registration = add.mock.calls.find(([type]) => type === 'blur')
+      expect(registration).toBeDefined()
+
+      fireEvent(window, new Event('blur'))
+
+      expect(onDragEnd).toHaveBeenCalledOnce()
+      expect(onDragEnd).toHaveBeenCalledWith({ dismissed: false })
+      expect(onDismiss).not.toHaveBeenCalled()
+      expect(remove).toHaveBeenCalledWith('blur', registration?.[1])
+      expect(root).toHaveAttribute('data-state', 'settling')
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+
+  test('lost pointer capture returns safely and leaves the next click usable', async () => {
+    const onClick = vi.fn()
+    const onDismiss = vi.fn()
+    vi.stubGlobal('matchMedia', () => ({ matches: true }))
+    try {
+      const { getByRole, getByTestId } = render(
+        <DragDismiss data-testid="root" onDismiss={onDismiss}>
+          <button onClick={onClick}>Action</button>
+        </DragDismiss>,
+      )
+      const root = getByTestId('root')
+      const button = getByRole('button')
+      measure(root)
+      pointer(root, 'pointerdown', {
+        clientX: 0,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      pointer(root, 'pointermove', {
+        clientX: 30,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      pointer(root, 'lostpointercapture', {
+        clientX: 30,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      await act(async () => Promise.resolve())
+
+      expect(root).toHaveAttribute('data-state', 'idle')
+      expect(onDismiss).not.toHaveBeenCalled()
+      fireEvent.click(button, { detail: 1 })
+      expect(onClick).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test('uses the callback snapshot from pointer down', () => {
+    const firstDismiss = vi.fn()
+    const nextDismiss = vi.fn()
+    const { getByTestId, rerender } = render(
+      <DragDismiss data-testid="root" onDismiss={firstDismiss}>
+        Row
+      </DragDismiss>,
+    )
+    const root = getByTestId('root')
+    measure(root)
+    pointer(root, 'pointerdown', {
+      clientX: 0,
+      clientY: 0,
+      pointerType: 'touch',
+    })
+    rerender(
+      <DragDismiss data-testid="root" onDismiss={nextDismiss}>
+        Row
+      </DragDismiss>,
+    )
+    pointer(root, 'pointermove', {
+      clientX: 100,
+      clientY: 0,
+      pointerType: 'touch',
+    })
+    pointer(root, 'pointerup', {
+      clientX: 100,
+      clientY: 0,
+      pointerType: 'touch',
+    })
+
+    expect(firstDismiss).toHaveBeenCalledOnce()
+    expect(firstDismiss).toHaveBeenCalledWith({ direction: 'end' })
+    expect(nextDismiss).not.toHaveBeenCalled()
+  })
+
+  test('unmount cancels active motion and releases session resources', () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const cancelFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 17),
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelFrame)
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    try {
+      const { getByTestId, unmount } = render(
+        <DragDismiss data-testid="root">Row</DragDismiss>,
+      )
+      const root = getByTestId('root')
+      measure(root)
+      pointer(root, 'pointerdown', {
+        clientX: 0,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      pointer(root, 'pointermove', {
+        clientX: 30,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+      const registration = add.mock.calls.find(([type]) => type === 'blur')
+      pointer(root, 'pointercancel', {
+        clientX: 30,
+        clientY: 0,
+        pointerType: 'touch',
+      })
+
+      unmount()
+
+      expect(remove).toHaveBeenCalledWith('blur', registration?.[1])
+      expect(cancelFrame).toHaveBeenCalledWith(17)
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test('ignores non-primary pointers and secondary mouse buttons', () => {
+    const onDragStart = vi.fn()
+    const { getByTestId } = render(
+      <DragDismiss data-testid="root" onDragStart={onDragStart}>
+        Row
+      </DragDismiss>,
+    )
+    const root = getByTestId('root')
+    measure(root)
+
+    pointer(root, 'pointerdown', {
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      isPrimary: false,
+      pointerType: 'touch',
+    })
+    pointer(root, 'pointermove', {
+      clientX: 100,
+      clientY: 0,
+      pointerType: 'touch',
+    })
+    pointer(root, 'pointerdown', {
+      button: 2,
+      clientX: 0,
+      clientY: 0,
+      pointerType: 'mouse',
+    })
+    pointer(root, 'pointermove', {
+      clientX: 100,
+      clientY: 0,
+      pointerType: 'mouse',
+    })
+
+    expect(onDragStart).not.toHaveBeenCalled()
+    expect(root).toHaveAttribute('data-state', 'idle')
+  })
 })

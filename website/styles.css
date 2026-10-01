@@ -287,6 +287,9 @@ h1 {
 .docs-layout aside {
   position: relative;
 }
+.docs-layout > article {
+  min-width: 0;
+}
 .docs-layout aside nav {
   position: sticky;
   top: 32px;
@@ -319,6 +322,7 @@ h1 {
 .doc-section code {
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.9em;
+  overflow-wrap: anywhere;
   background: #eaf0f8;
   padding: 2px 5px;
 }
@@ -450,6 +454,9 @@ footer nav {
   }
   .docs-layout aside {
     display: none;
+  }
+  .api-table > div {
+    grid-template-columns: 1fr;
   }
   .two-col,
   .comparison {

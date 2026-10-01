@@ -76,6 +76,20 @@ for (const width of [1440, 390, 320]) {
         parseFloat(getComputedStyle(link).outlineWidth),
       ),
     ).toBeGreaterThanOrEqual(2)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width)
+
+    if (width === 320) {
+      await page.setViewportSize({ width: 1440, height: 900 })
+      await page.setViewportSize({ width, height: 900 })
+      await support.scrollIntoViewIfNeeded()
+      await explore.focus()
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width)
+    }
+
     if (process.env.SUPPORT_CTA_SCREENSHOTS === '1')
       await support.screenshot({
         path: testInfo.outputPath('support-cta.png'),

@@ -206,6 +206,57 @@ h1 {
   padding: 10px 14px;
   cursor: pointer;
 }
+.support-cta {
+  display: flex;
+  max-width: 1280px;
+  margin: auto;
+  padding: 40px 32px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 32px;
+  border-top: 1px solid #cbd6e7;
+}
+.support-cta__copy {
+  flex: 1 1 480px;
+  min-width: 0;
+}
+.support-cta h2 {
+  margin: 0;
+  font-size: clamp(30px, 3vw, 42px);
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+}
+.support-cta p {
+  max-width: 64ch;
+  margin: 14px 0 0;
+  color: #43536c;
+  line-height: 1.65;
+}
+.support-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.support-cta__actions a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 20px;
+  border: 1px solid #cbd6e7;
+  font-weight: 700;
+  text-decoration: none;
+}
+.support-cta__actions .support-cta__primary {
+  border-color: var(--blue);
+  color: white;
+  background: var(--blue);
+  box-shadow: 7px 7px 0 var(--saffron);
+}
+.support-cta__actions a:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 4px;
+}
 .principle-strip {
   border-block: 1px solid #cbd6e7;
   display: grid;
@@ -414,6 +465,7 @@ footer nav {
   }
   .site-header,
   .hero,
+  .support-cta,
   .docs-layout,
   footer {
     padding-left: 20px;

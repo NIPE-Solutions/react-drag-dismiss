@@ -214,8 +214,8 @@ function findRun(job, fragment) {
   return step
 }
 
-function assertActionMajor(job, action) {
-  assert.equal(findAction(job, action).uses, `${action}@v7`)
+function assertActionMajor(job, action, major = 7) {
+  assert.equal(findAction(job, action).uses, `${action}@v${major}`)
 }
 
 function assertNodeSetup(job, { registry = false } = {}) {
@@ -345,7 +345,7 @@ function validateReleaseWorkflow(workflow) {
     false,
   )
   assertNodeSetup(publish, { registry: true })
-  assertActionMajor(publish, 'actions/download-artifact')
+  assertActionMajor(publish, 'actions/download-artifact', 8)
   const download = findAction(publish, 'actions/download-artifact')
   assert.equal(download.with?.name, 'npm-package-stable')
   assert.equal(download.with?.path, 'release-artifact')

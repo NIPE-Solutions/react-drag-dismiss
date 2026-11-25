@@ -44,7 +44,7 @@ test('repository metadata satisfies stable release policy', async () => {
 
   assert.deepEqual(validateReleaseMetadata(packageJson, changelog), {
     name: stablePackage.name,
-    version: '1.0.0',
+    version: '1.0.1',
     channel: 'latest',
   })
 })

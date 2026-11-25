@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 — 2026-11-25
+
+- Expand the README with use cases and complete integration examples.
+- Fix overflow on narrow documentation pages and add project support links to the homepage.
+- Update development and release tooling, including Vite 8.3.8 and the compatible React plugin.
+
 ## 1.0.0 — 2026-09-30
 
 - Stabilize the existing `DragDismiss` component, public TypeScript types, logical direction model, callback lifecycle, and `core.css` styling contract.

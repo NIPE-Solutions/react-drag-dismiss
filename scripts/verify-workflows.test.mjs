@@ -18,7 +18,7 @@ import { parse } from 'yaml'
 
 const execFileAsync = promisify(execFile)
 const repositoryRoot = path.resolve(import.meta.dirname, '..')
-const releaseTarball = 'nipe-solutions-react-drag-dismiss-1.0.0.tgz'
+const releaseTarball = 'nipe-solutions-react-drag-dismiss-1.0.1.tgz'
 
 test('CI enforces the deterministic quality and browser matrix', async () => {
   validateCiWorkflow(await readWorkflow('.github/workflows/ci.yml'))
@@ -88,7 +88,7 @@ test('publish shell rejects a checksum that names a substituted artifact', async
     )
 
     await rm(marker)
-    const substitutedName = 'nipe-solutions-react-drag-dismiss-1X0X0Xtgz'
+    const substitutedName = 'nipe-solutions-react-drag-dismiss-1X0X1Xtgz'
     await writeFile(
       path.join(artifactDirectory, substitutedName),
       'substituted artifact\n',
@@ -143,7 +143,7 @@ test('release validator rejects weakened trust boundaries', async () => {
       const finalStep = copy.jobs.publish.steps.at(-1)
       finalStep.run = finalStep.run.replace(
         releaseTarball,
-        'nipe-solutions-react-drag-dismiss-1.0.1.tgz',
+        'nipe-solutions-react-drag-dismiss-1.0.0.tgz',
       )
     },
     (copy) => {
